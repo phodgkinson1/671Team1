@@ -15,7 +15,7 @@ print("Using device:", device)
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=300, hidden_dim=1024, output_dim=None):
+    def __init__(self, vocab_size, embedding_dim=200, hidden_dim=768, output_dim=None):
         super(LSTMTextGenerationModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=3, batch_first=True, dropout=0.2, bidirectional=True)
@@ -30,7 +30,7 @@ class LSTMTextGenerationModel(nn.Module):
 
 # Load the pre-trained model
 model_path = "lstm_word_generation_model.pth"
-model = LSTMTextGenerationModel(len(tokenizer.word_index) + 1, embedding_dim=300, hidden_dim=1024, output_dim=len(tokenizer.word_index) + 1)
+model = LSTMTextGenerationModel(len(tokenizer.word_index) + 1, embedding_dim=200, hidden_dim=768, output_dim=len(tokenizer.word_index) + 1)
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 model.eval()
@@ -45,17 +45,18 @@ def generate_text(seed_text, next_words=100, temperature=0.7, top_k=10):
     
     with torch.no_grad():
         for _ in range(next_words):
+            # Tokenize and pad the input sequence to the required length
             tokenized_input = tokenizer.texts_to_sequences([generated_text.split()])
-            tokenized_input = pad_sequences([tokenized_input[0]], maxlen=50, padding='pre')
+            tokenized_input = pad_sequences([tokenized_input[0]], maxlen=40, padding='pre')
             tokenized_input = torch.tensor(tokenized_input, dtype=torch.long).to(device)
             
             output = model(tokenized_input).squeeze()
             output = output / temperature
-            # Top-k sampling
+            # Apply top-k sampling for diverse generation
             top_k_prob, top_k_indices = torch.topk(F.softmax(output, dim=-1), top_k)
             next_word_idx = top_k_indices[torch.multinomial(top_k_prob, 1).item()]
             next_word = tokenizer.index_word.get(next_word_idx.item(), '')
-            if not next_word:
+            if not next_word:  # If no next word is found, end generation
                 break
             generated_text += ' ' + next_word
     return generated_text

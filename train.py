@@ -12,9 +12,9 @@ import pickle
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-# Load a large subset of WikiText-103 dataset
-print("Loading a larger subset of WikiText-103 dataset...")
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:20%]")  # Increased sample size
+# Load a subset of WikiText-103 dataset
+print("Loading a subset of WikiText-103 dataset...")
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:6%]")  # Reduced dataset size
 text_samples = dataset['text']
 text = " ".join(text_samples)
 
@@ -35,7 +35,7 @@ print("Converting text to integer sequence...")
 input_sequence = tokenizer.texts_to_sequences([filtered_text])[0]
 
 # Define sequence length and steps per epoch
-sequence_length = 50
+sequence_length = 40  # Reduced sequence length
 steps_per_epoch = 1
 sequences = []
 next_words = []
@@ -64,11 +64,11 @@ class TextDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 dataset = TextDataset(X, y)
-dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Increased batch size
+dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Reduced batch size
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=300, hidden_dim=1024, output_dim=None):
+    def __init__(self, vocab_size, embedding_dim=200, hidden_dim=768, output_dim=None):
         super(LSTMTextGenerationModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=3, batch_first=True, dropout=0.2, bidirectional=True)
@@ -82,31 +82,38 @@ class LSTMTextGenerationModel(nn.Module):
         return x
 
 # Instantiate the model, loss function, and optimizer
-embedding_dim = 300
-hidden_dim = 1024
+embedding_dim = 200
+hidden_dim = 768
 model = LSTMTextGenerationModel(total_words, embedding_dim, hidden_dim, total_words).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0005)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2)  # Updated scheduler parameters
 
-# Training loop with gradient clipping
+# Training loop with gradient accumulation
 print("Starting training...")
-num_epochs = 80  # Increased number of epochs
-loss_history = []
+num_epochs = 10  # Reduced epochs for initial testing
+accumulation_steps = 2  # Number of mini-batches to accumulate gradients
 
+loss_history = []
 for epoch in range(num_epochs):
     total_loss = 0
     model.train()
     
     for batch_idx, (inputs, targets) in enumerate(dataloader):
-        optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, targets)
+        loss = loss / accumulation_steps  # Normalize loss by accumulation steps
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)  # Updated gradient clipping
-        optimizer.step()
         
-        total_loss += loss.item()
+        if (batch_idx + 1) % accumulation_steps == 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5)  # Apply gradient clipping
+            optimizer.step()
+            optimizer.zero_grad()
+        
+        total_loss += loss.item() * accumulation_steps  # Scale back up for tracking
+        
+        if (batch_idx + 1) % 100 == 0:
+            print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item() * accumulation_steps:.4f}")
         
     scheduler.step()
     avg_loss = total_loss / len(dataloader)
