@@ -4,12 +4,8 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # Virtual Env
+.DS_Store
 dlenv/
-
-#Other
-Figure_1.png
-lstm_word_generation_model.pth
-tokenizer.pkl
 
 # User-specific files
 *.rsuser
