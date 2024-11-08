@@ -13,8 +13,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 # Load a subset of WikiText-103 dataset
-print("Loading bookcorpus dataset...")
-dataset = load_dataset("bookcorpus", split="train[:5%]")
+print("Loading a subset of WikiText-103 dataset...")
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:5%]")  # Reduced dataset size
 text_samples = dataset['text']
 text = " ".join(text_samples)
 
@@ -35,7 +35,7 @@ print("Converting text to integer sequence...")
 input_sequence = tokenizer.texts_to_sequences([filtered_text])[0]
 
 # Define sequence length and steps per epoch
-sequence_length = 40
+sequence_length = 40  # Reduced sequence length
 steps_per_epoch = 1
 sequences = []
 next_words = []
@@ -64,7 +64,7 @@ class TextDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 dataset = TextDataset(X, y)
-dataloader = DataLoader(dataset, batch_size=256, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Reduced batch size
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
@@ -72,7 +72,7 @@ class LSTMTextGenerationModel(nn.Module):
         super(LSTMTextGenerationModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=3, batch_first=True, dropout=0.2, bidirectional=True)
-        self.fc = nn.Linear(hidden_dim * 2, output_dim)
+        self.fc = nn.Linear(hidden_dim * 2, output_dim)  # Account for bidirectionality
 
     def forward(self, x):
         x = self.embedding(x)
@@ -91,7 +91,7 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2)  # Upda
 
 # Training loop with gradient accumulation
 print("Starting training...")
-num_epochs = 20  # Reduced epochs for initial testing
+num_epochs = 10  # Reduced epochs for initial testing
 accumulation_steps = 2  # Number of mini-batches to accumulate gradients
 
 loss_history = []
@@ -121,12 +121,12 @@ for epoch in range(num_epochs):
     print(f"Epoch [{epoch+1}/{num_epochs}] completed with average loss: {avg_loss:.4f}")
 
 print("Training complete.")
-model_path = "lstm_bookcorpus_model.pth"
+model_path = "lstm_word_generation_model.pth"
 torch.save(model.state_dict(), model_path)
 print(f"Model saved to {model_path}")
 
 # Save tokenizer for use in generation
-with open("tokenizer_bookcorpus.pkl", "wb") as f:
+with open("tokenizer.pkl", "wb") as f:
     pickle.dump(tokenizer, f)
 print("Tokenizer saved to tokenizer.pkl")
 
