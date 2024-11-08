@@ -14,7 +14,7 @@ print("Using device:", device)
 
 # Load a large subset of WikiText-103 dataset
 print("Loading a larger subset of WikiText-103 dataset...")
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:20%]")  # Increased sample size
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:8%]")  # Increased sample size
 text_samples = dataset['text']
 text = " ".join(text_samples)
 
@@ -35,7 +35,7 @@ print("Converting text to integer sequence...")
 input_sequence = tokenizer.texts_to_sequences([filtered_text])[0]
 
 # Define sequence length and steps per epoch
-sequence_length = 50
+sequence_length = 60
 steps_per_epoch = 1
 sequences = []
 next_words = []
@@ -64,7 +64,7 @@ class TextDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 dataset = TextDataset(X, y)
-dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Increased batch size
+dataloader = DataLoader(dataset, batch_size=512, shuffle=True)  # Increased batch size
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
@@ -91,7 +91,7 @@ scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2)  # Upda
 
 # Training loop with gradient clipping
 print("Starting training...")
-num_epochs = 80  # Increased number of epochs
+num_epochs = 20  # Increased number of epochs
 loss_history = []
 
 for epoch in range(num_epochs):
@@ -107,6 +107,9 @@ for epoch in range(num_epochs):
         optimizer.step()
         
         total_loss += loss.item()
+
+        if (batch_idx + 1) % 100 == 0:
+            print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item():.4f}")
         
     scheduler.step()
     avg_loss = total_loss / len(dataloader)
