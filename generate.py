@@ -6,7 +6,7 @@ import re
 import pickle
 
 # Load tokenizer
-with open("tokenizer.pkl", "rb") as f:
+with open("tokenizer_bookcorpus.pkl", "rb") as f:
     tokenizer = pickle.load(f)
 
 # Set device (GPU if available)
@@ -29,7 +29,7 @@ class LSTMTextGenerationModel(nn.Module):
         return x
 
 # Load the pre-trained model
-model_path = "lstm_word_generation_model.pth"
+model_path = "lstm_bookcorpus_model.pth"
 model = LSTMTextGenerationModel(len(tokenizer.word_index) + 1, embedding_dim=200, hidden_dim=768, output_dim=len(tokenizer.word_index) + 1)
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)

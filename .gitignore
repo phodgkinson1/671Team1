@@ -6,6 +6,11 @@
 # Virtual Env
 dlenv/
 
+#Other
+Figure_1.png
+lstm_word_generation_model.pth
+tokenizer.pkl
+
 # User-specific files
 *.rsuser
 *.suo
