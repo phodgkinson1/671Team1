@@ -15,22 +15,28 @@ print("Using device:", device)
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=200, hidden_dim=768, output_dim=None):
+    def __init__(self, vocab_size, embedding_dim=150, hidden_dim=512, output_dim=None):
         super(LSTMTextGenerationModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=3, batch_first=True, dropout=0.2, bidirectional=True)
-        self.fc = nn.Linear(hidden_dim * 2, output_dim)
-
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=2, batch_first=True, dropout=0.2, bidirectional=True)
+        self.attention_fc = nn.Linear(hidden_dim * 2, 1)
+        self.fc = nn.Linear(hidden_dim * 2, output_dim)  # Account for bidirectionality
+    def attention(self, lstm_out):
+        attention_weights = torch.tanh(self.attention_fc(lstm_out))
+        attention_weights = F.softmax(attention_weights, dim=1)
+        weighted_output = torch.sum(attention_weights * lstm_out, dim=1)
+        return weighted_output
+    
     def forward(self, x):
         x = self.embedding(x)
         x, _ = self.lstm(x)
-        x = x[:, -1, :]  # Take only the last output for prediction
-        x = self.fc(x)
+        attention_out = self.attention(x)   
+        x = self.fc(attention_out) 
         return x
 
 # Load the pre-trained model
 model_path = "lstm_word_generation_model.pth"
-model = LSTMTextGenerationModel(len(tokenizer.word_index) + 1, embedding_dim=200, hidden_dim=768, output_dim=len(tokenizer.word_index) + 1)
+model = LSTMTextGenerationModel(len(tokenizer.word_index) + 1, embedding_dim=150, hidden_dim=512, output_dim=len(tokenizer.word_index) + 1)
 model.load_state_dict(torch.load(model_path, map_location=device))
 model.to(device)
 model.eval()

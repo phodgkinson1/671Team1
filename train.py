@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, DataLoader
 from tensorflow.keras.preprocessing.text import Tokenizer
@@ -68,22 +69,28 @@ dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Reduced batch 
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
-    def __init__(self, vocab_size, embedding_dim=200, hidden_dim=768, output_dim=None):
+    def __init__(self, vocab_size, embedding_dim=150, hidden_dim=512, output_dim=None):
         super(LSTMTextGenerationModel, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=3, batch_first=True, dropout=0.2, bidirectional=True)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=2, batch_first=True, dropout=0.2, bidirectional=True)
+        self.attention_fc = nn.Linear(hidden_dim * 2, 1)
         self.fc = nn.Linear(hidden_dim * 2, output_dim)  # Account for bidirectionality
-
+    def attention(self, lstm_out):
+        attention_weights = torch.tanh(self.attention_fc(lstm_out))
+        attention_weights = F.softmax(attention_weights, dim=1)
+        weighted_output = torch.sum(attention_weights * lstm_out, dim=1)
+        return weighted_output
+    
     def forward(self, x):
         x = self.embedding(x)
         x, _ = self.lstm(x)
-        x = x[:, -1, :]  # Take only the last output for prediction
-        x = self.fc(x)
+        attention_out = self.attention(x)   
+        x = self.fc(attention_out) 
         return x
 
 # Instantiate the model, loss function, and optimizer
-embedding_dim = 200
-hidden_dim = 768
+embedding_dim = 150
+hidden_dim = 512
 model = LSTMTextGenerationModel(total_words, embedding_dim, hidden_dim, total_words).to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.0005)
