@@ -9,13 +9,14 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from datasets import load_dataset
 import re
 import pickle
+import time
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 # Load a subset of WikiText-103 dataset
 print("Loading a subset of WikiText-103 dataset...")
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:5%]")  # Reduced dataset size
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:15%]")  # Reduced dataset size
 text_samples = dataset['text']
 text = " ".join(text_samples)
 
@@ -65,7 +66,7 @@ class TextDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 dataset = TextDataset(X, y)
-dataloader = DataLoader(dataset, batch_size=256, shuffle=True)  # Reduced batch size
+dataloader = DataLoader(dataset, batch_size=512, shuffle=True)  # Reduced batch size
 
 # Define the LSTM Model
 class LSTMTextGenerationModel(nn.Module):
@@ -88,12 +89,23 @@ class LSTMTextGenerationModel(nn.Module):
         x = self.fc(attention_out) 
         return x
 
+def format_seconds(seconds):
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    elif seconds < 3600:
+        minutes, seconds = divmod(seconds, 60)
+        return f"{minutes:.0f}m, {seconds:.0f}s"
+    else:
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:.0f}h, {minutes:.0f}m, {seconds:.0f}s"
+
 # Instantiate the model, loss function, and optimizer
 embedding_dim = 150
 hidden_dim = 512
 model = LSTMTextGenerationModel(total_words, embedding_dim, hidden_dim, total_words).to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0005)
+optimizer = optim.Adam(model.parameters(), lr=0.001)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2)  # Updated scheduler parameters
 
 # Training loop with gradient accumulation
@@ -105,8 +117,11 @@ loss_history = []
 for epoch in range(num_epochs):
     total_loss = 0
     model.train()
-    
+    epoch_start_time = time.time() 
+
     for batch_idx, (inputs, targets) in enumerate(dataloader):
+        batch_start_time = time.time()
+
         outputs = model(inputs)
         loss = criterion(outputs, targets)
         loss = loss / accumulation_steps  # Normalize loss by accumulation steps
@@ -119,13 +134,21 @@ for epoch in range(num_epochs):
         
         total_loss += loss.item() * accumulation_steps  # Scale back up for tracking
         
+        batch_time = time.time() - batch_start_time
+        elapsed_time = time.time() - epoch_start_time
+        remaining_batches = len(dataloader) - (batch_idx + 1)
+        estimated_time_left = batch_time * remaining_batches
+
         if (batch_idx + 1) % 100 == 0:
-            print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item() * accumulation_steps:.4f}")
+            print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], "
+                  f"Loss: {loss.item() * accumulation_steps:.4f}, "
+                  f"Elapsed Time: {format_seconds(elapsed_time)}s, Estimated Time Left: {format_seconds(estimated_time_left)}")
         
     scheduler.step()
     avg_loss = total_loss / len(dataloader)
     loss_history.append(avg_loss)
-    print(f"Epoch [{epoch+1}/{num_epochs}] completed with average loss: {avg_loss:.4f}")
+    epoch_duration = time.time() - epoch_start_time
+    print(f"Epoch [{epoch+1}/{num_epochs}] completed with average loss: {avg_loss:.4f} in {format_seconds(epoch_duration)}")
 
 print("Training complete.")
 model_path = "lstm_word_generation_model.pth"
