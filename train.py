@@ -10,14 +10,23 @@ from datasets import load_dataset
 import re
 import pickle
 import time
+import math
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 # Load a subset of WikiText-103 dataset
-print("Loading a subset of WikiText-103 dataset...")
-dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:15%]")  # Reduced dataset size
-text_samples = dataset['text']
+print("Loading WikiText-103 dataset...")
+# dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train[:15%]")  # Reduced dataset size
+dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
+
+shuffled_dataset = dataset.shuffle(seed=9721) 
+
+sampled_dataset = shuffled_dataset.select(range(int(0.005 * len(shuffled_dataset))))
+
+print(f"Original dataset size: {len(dataset)}")
+print(f"Sampled dataset size: {len(sampled_dataset)}, {100*len(sampled_dataset)/len(dataset):.1f}% dataset")
+text_samples = sampled_dataset['text']
 text = " ".join(text_samples)
 
 # Filter out unwanted symbols
@@ -114,8 +123,11 @@ num_epochs = 10  # Reduced epochs for initial testing
 accumulation_steps = 2  # Number of mini-batches to accumulate gradients
 
 loss_history = []
+perplexity_history = []
+train_start_time = time.time() 
 for epoch in range(num_epochs):
     total_loss = 0
+    total_tokens = 0
     model.train()
     epoch_start_time = time.time() 
 
@@ -133,24 +145,28 @@ for epoch in range(num_epochs):
             optimizer.zero_grad()
         
         total_loss += loss.item() * accumulation_steps  # Scale back up for tracking
-        
-        batch_time = time.time() - batch_start_time
-        elapsed_time = time.time() - epoch_start_time
-        remaining_batches = len(dataloader) - (batch_idx + 1)
-        estimated_time_left = batch_time * remaining_batches
+        total_tokens += targets.numel()
 
         if (batch_idx + 1) % 100 == 0:
+            batch_time = time.time() - batch_start_time
+            elapsed_time = time.time() - train_start_time
+            remaining_batches = ((10-epoch)*len(dataloader)) - (batch_idx + 1)
+            estimated_time_left = batch_time * remaining_batches
+
             print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], "
                   f"Loss: {loss.item() * accumulation_steps:.4f}, "
-                  f"Elapsed Time: {format_seconds(elapsed_time)}s, Estimated Time Left: {format_seconds(estimated_time_left)}")
+                  f"Elapsed Time: {format_seconds(elapsed_time)}, Estimated Time Left: {format_seconds(estimated_time_left)}")
         
     scheduler.step()
     avg_loss = total_loss / len(dataloader)
     loss_history.append(avg_loss)
+    perplexity = math.exp(total_loss / total_tokens)
+    perplexity_history.append(perplexity)
     epoch_duration = time.time() - epoch_start_time
-    print(f"Epoch [{epoch+1}/{num_epochs}] completed with average loss: {avg_loss:.4f} in {format_seconds(epoch_duration)}")
+    print(f"Epoch [{epoch+1}/{num_epochs}] completed with average loss: {avg_loss:.4f}, Perplexity: {perplexity:.2f} in {format_seconds(epoch_duration)}")
 
-print("Training complete.")
+elapsed_time = time.time() - train_start_time
+print(f"Training complete in {format_seconds(elapsed_time)}.")
 model_path = "lstm_word_generation_model.pth"
 torch.save(model.state_dict(), model_path)
 print(f"Model saved to {model_path}")
@@ -166,6 +182,15 @@ plt.plot(range(1, num_epochs + 1), loss_history, marker='o', label='Training Los
 plt.xlabel("Epoch")
 plt.ylabel("Loss")
 plt.title("Training Loss Over Epochs")
+plt.legend()
+plt.grid(True)
+plt.show()
+# Plot the Perplexity history
+plt.figure(figsize=(10, 5))
+plt.plot(range(1, num_epochs + 1), perplexity_history, marker='o', label='Training Perplexity')
+plt.xlabel("Epoch")
+plt.ylabel("Perplexity")
+plt.title("Perplexity Over Epochs")
 plt.legend()
 plt.grid(True)
 plt.show()
