@@ -193,4 +193,8 @@ plt.ylabel("Perplexity")
 plt.title("Perplexity Over Epochs")
 plt.legend()
 plt.grid(True)
+<<<<<<< HEAD
 plt.show()
+=======
+plt.show()
+>>>>>>> 9ee2f8bef0275b1ca53e270c97768ef990f67d14
