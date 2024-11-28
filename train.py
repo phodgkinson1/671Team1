@@ -22,7 +22,7 @@ dataset = load_dataset("wikitext", "wikitext-103-raw-v1", split="train")
 
 shuffled_dataset = dataset.shuffle(seed=9721) 
 
-sampled_dataset = shuffled_dataset.select(range(int(0.005 * len(shuffled_dataset))))
+sampled_dataset = shuffled_dataset.select(range(int(0.33 * len(shuffled_dataset))))
 
 print(f"Original dataset size: {len(dataset)}")
 print(f"Sampled dataset size: {len(sampled_dataset)}, {100*len(sampled_dataset)/len(dataset):.1f}% dataset")
